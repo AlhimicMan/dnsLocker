@@ -1,0 +1,86 @@
+package main
+
+import (
+	"flag"
+	"log"
+	"os"
+	"os/signal"
+	"time"
+
+	"github.com/miekg/dns"
+)
+
+var (
+	config    *Config
+	blackList *BlackList
+	cache     Cache
+
+	configFile = flag.String("c", "etc/config.yaml", "configuration file")
+)
+
+func startServer() {
+	tcpHandler := dns.NewServeMux()
+	tcpHandler.HandleFunc(".", HandlerTCP)
+
+	udpHandler := dns.NewServeMux()
+	udpHandler.HandleFunc(".", HandlerUDP)
+
+	tcpServer := &dns.Server{Addr: "0.0.0.0:53",
+		Net:          "tcp",
+		Handler:      tcpHandler,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+	}
+
+	udpServer := &dns.Server{Addr: "0.0.0.0:53",
+		Net:          "udp",
+		Handler:      udpHandler,
+		UDPSize:      65535,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		if err := tcpServer.ListenAndServe(); err != nil {
+			log.Fatal("TCP-server start failed", err.Error())
+		}
+	}()
+	go func() {
+		if err := udpServer.ListenAndServe(); err != nil {
+			log.Fatal("UDP-server start failed", err.Error())
+		}
+	}()
+}
+
+func listenInterrupt() {
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt)
+
+	for {
+		select {
+		case <-sig:
+			log.Println("Terminating...")
+			return
+		}
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	// var err error
+	configChanged := make(chan struct{}, 1)
+	go configWatcher(configChanged)
+	<-configChanged
+	if config == nil {
+		return
+	}
+
+	cache = NewMemoryCache()
+
+	blackList = UpdateList()
+	go listUpdater(configChanged)
+
+	startServer()
+	listenInterrupt()
+}

@@ -1,0 +1,13 @@
+nameservers:
+  - 8.8.8.8:53
+  - 8.8.4.4:53
+  - 10.0.0.1:53
+  - 77.88.8.88:53
+  - 77.88.8.2:53
+blocklist:
+blockhosts:
+  - (.*\.example\.com)
+blockAddress4: 1.2.3.4
+blockAddress6: 0:0:0:0:0:0:0:0
+configUpdate: true
+updateInterval: 1m
